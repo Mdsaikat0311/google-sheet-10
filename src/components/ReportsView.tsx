@@ -5,6 +5,23 @@ const cleanRate = (rate?: string) => {
   return trimmed.endsWith('%') ? trimmed : `${trimmed}%`;
 };
 
+// Helper for consistent source colors across charts
+const getSourceColor = (sourceName: string, index = 0): string => {
+  const norm = sourceName.toLowerCase().trim();
+  if (norm.includes('web')) return '#3b82f6';
+  if (norm.includes('mess') || norm.includes('face') || norm.includes('fb')) return '#8b5cf6';
+  if (norm.includes('what') || norm.includes('wa')) return '#10b981';
+  if (norm.includes('tik')) return '#ec4899';
+  if (norm.includes('call') || norm.includes('phone') || norm.includes('direct')) return '#f59e0b';
+  if (norm.includes('you') || norm.includes('yt')) return '#dc2626';
+  if (norm.includes('incom')) return '#ef4444';
+  if (norm.includes('land') || norm.includes('funnel')) return '#06b6d4';
+  if (norm.includes('insta') || norm.includes('ig')) return '#f43f5e';
+
+  const palette = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#f97316', '#a855f7'];
+  return palette[index % palette.length];
+};
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Truck,
@@ -32,6 +49,7 @@ import {
   ArrowUpRight,
   ArrowLeft,
   Sparkles,
+  PieChart,
 } from 'lucide-react';
 import { Order, Sheet1ProductReport, ProductReportSource } from '../types';
 import { fetchSheet1Reports, DEFAULT_SPREADSHEET_ID } from '../services/sheets';
@@ -1632,13 +1650,29 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             ) : (
               <div className="grid grid-cols-1 gap-2.5">
                 {filteredProducts.map((prod) => {
-                  const { prodStats } = getProductAnalytics(prod);
+                  const { prodStats, sourcesList } = getProductAnalytics(prod);
+
+                  // Extract active sources with orders
+                  const activeSources = sourcesList
+                    .filter((s) => s.lead > 0)
+                    .map((s, sIdx) => ({
+                      ...s,
+                      color: getSourceColor(s.name, sIdx),
+                    }));
+
+                  const totalOrders = prodStats.lead || activeSources.reduce((sum, s) => sum + s.lead, 0);
+
+                  const displaySources = activeSources.length > 0
+                    ? activeSources
+                    : totalOrders > 0
+                    ? [{ name: 'Website', lead: totalOrders, color: '#3b82f6', sharePercent: '100%' }]
+                    : [];
 
                   return (
                     <div
                       key={prod.id}
                       onClick={() => setSelectedDetailProductId(prod.id)}
-                      className="bg-[#12151f] border border-[#1e2436] hover:border-pink-500/60 rounded-xl p-2.5 sm:p-3 transition-all shadow-md hover:shadow-xl hover:shadow-pink-500/10 cursor-pointer group space-y-2"
+                      className="bg-[#12151f] border border-[#1e2436] hover:border-pink-500/60 rounded-xl p-2.5 sm:p-3 transition-all shadow-md hover:shadow-xl hover:shadow-pink-500/10 cursor-pointer group space-y-2.5"
                     >
                       {/* কার্ড হেডার: মিনিমাল ও কমপ্যাক্ট, কোনো ছোট বাটন ছাড়া */}
                       <div className="flex items-center justify-between gap-2 border-b border-[#1c2232] pb-1.5">
@@ -1657,6 +1691,103 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/10 border border-pink-500/20 text-pink-400 text-[11px] font-semibold group-hover:bg-pink-500 group-hover:text-white transition-all flex-shrink-0">
                           <span>সোর্স ডাটা</span>
                           <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </div>
+
+                      {/* সোর্স ভিত্তিক অর্ডার রাউন্ড চার্ট ও ব্রেকডাউন (Source Orders Round Chart) */}
+                      <div className="bg-[#0b0e17] border border-[#192032] rounded-xl p-2.5 flex flex-col sm:flex-row items-center gap-3">
+                        {/* Round Donut Chart */}
+                        <div className="relative w-20 h-20 sm:w-22 sm:h-22 shrink-0 flex items-center justify-center">
+                          <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                            {/* Background Track */}
+                            <circle
+                              cx="50"
+                              cy="50"
+                              r="38"
+                              stroke="#181f2f"
+                              strokeWidth="12"
+                              fill="transparent"
+                            />
+                            {/* Source Slices */}
+                            {(() => {
+                              if (totalOrders === 0 || displaySources.length === 0) return null;
+                              let accumulatedPercent = 0;
+                              const circumference = 2 * Math.PI * 38; // ~238.76
+                              return displaySources.map((s, idx) => {
+                                const percent = (s.lead / totalOrders) * 100;
+                                const dashLength = (percent / 100) * circumference;
+                                const dashOffset = -((accumulatedPercent / 100) * circumference);
+                                accumulatedPercent += percent;
+                                return (
+                                  <circle
+                                    key={idx}
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    stroke={s.color}
+                                    strokeWidth="12"
+                                    strokeDasharray={`${dashLength} ${circumference}`}
+                                    strokeDashoffset={`${dashOffset}`}
+                                    fill="transparent"
+                                    className="transition-all duration-700"
+                                  />
+                                );
+                              });
+                            })()}
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                            <span className="text-xs sm:text-sm font-black text-white font-mono leading-none">
+                              {totalOrders}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-medium mt-0.5 leading-none">
+                              অর্ডার
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Source breakdown legend & order counts */}
+                        <div className="flex-1 w-full min-w-0">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[11px] font-semibold text-gray-300 flex items-center gap-1.5">
+                              <PieChart className="w-3.5 h-3.5 text-pink-400" />
+                              <span>সোর্স অনুযায়ী অর্ডার (রাউন্ড চার্ট)</span>
+                            </span>
+                            <span className="text-[10px] text-pink-400 font-mono font-medium">
+                              মোট {totalOrders} টি
+                            </span>
+                          </div>
+
+                          {displaySources.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                              {displaySources.map((s, idx) => {
+                                const percent = totalOrders > 0 ? Math.round((s.lead / totalOrders) * 100) : 0;
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="bg-[#121624] border border-[#1d2538] hover:border-pink-500/30 rounded-lg px-2 py-1 flex items-center justify-between gap-1.5 text-[11px] min-w-0 transition-colors"
+                                    title={`${s.name}: ${s.lead}টি অর্ডার (${percent}%)`}
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                      <span
+                                        className="w-2 h-2 rounded-full shrink-0 shadow-xs"
+                                        style={{ backgroundColor: s.color }}
+                                      />
+                                      <span className="text-gray-300 truncate font-medium text-[10.5px]">
+                                        {s.name}
+                                      </span>
+                                    </div>
+                                    <span className="font-mono font-bold text-white shrink-0 text-[10.5px]">
+                                      {s.lead} <span className="text-[9px] text-gray-400 font-normal">({percent}%)</span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-gray-400 italic py-1 bg-[#121624] rounded-lg px-2.5 text-center border border-[#1d2538]">
+                              এই প্রোডাক্টে নির্বাচিত সময়ে কোনো সোর্স অর্ডার পাওয়া যায়নি।
+                            </div>
+                          )}
                         </div>
                       </div>
 
