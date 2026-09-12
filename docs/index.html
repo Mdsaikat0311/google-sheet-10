@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>মাই ব্যবসা ড্যাশবোর্ড</title>
+    <meta name="description" content="ই-কমার্স অর্ডার ম্যানেজমেন্ট, কুরিয়ার ট্র্যাকিং এবং গুগল শিট অটোমেশন ড্যাশবোর্ড।" />
+    <meta property="og:title" content="মাই ব্যবসা ড্যাশবোর্ড" />
+    <meta property="og:description" content="ই-কমার্স অর্ডার ম্যানেজমেন্ট, কুরিয়ার ট্র্যাকিং এবং গুগল শিট অটোমেশন ড্যাশবোর্ড।" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-D6x-bTdp.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DggWuyLk.css">
+  </head>
+  <body style="margin: 0; background-color: #0a0c13; color: #f3f4f6;">
+    <div id="root">
+      <div style="min-height: 100vh; background-color: #0a0c13; color: #f3f4f6; display: flex; align-items: center; justify-content: center; font-family: 'Hind Siliguri', sans-serif;">
+        <div style="text-align: center; max-width: 420px; padding: 28px; border: 1px solid #1f293d; border-radius: 16px; background: #121622; box-shadow: 0 20px 30px rgba(0,0,0,0.5);">
+          <div style="width: 44px; height: 44px; border: 3px solid rgba(236, 72, 153, 0.2); border-top-color: #ec4899; border-radius: 50%; margin: 0 auto 16px auto; animation: spin 1s linear infinite;"></div>
+          <h2 style="font-size: 17px; font-weight: 600; margin: 0 0 8px 0; color: #ffffff;">মাই ব্যবসা ড্যাশবোর্ড লোড হচ্ছে...</h2>
+          <p id="initial-loading-status" style="font-size: 13px; color: #9ca3af; margin: 0; line-height: 1.5;">অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন...</p>
+          <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+            <a id="docs-redirect-btn" href="./docs/" style="display: none; padding: 7px 18px; background: #ec4899; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: 600; font-family: inherit;">ড্যাশবোর্ড চালু করুন (Docs)</a>
+            <button id="initial-loading-retry" style="display: none; padding: 7px 18px; background: #22293d; color: #ffffff; border: 1px solid #374151; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;" onclick="window.location.reload()">পুনরায় চেষ্টা করুন</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      window.__appLoaded = false;
+      function handleMainScriptError() {
+        var s = document.getElementById('initial-loading-status');
+        var b = document.getElementById('initial-loading-retry');
+        var d = document.getElementById('docs-redirect-btn');
+        if (s) s.innerText = 'কম্পাইল্ড অ্যাপ লোড করা হচ্ছে...';
+        if (d) d.style.display = 'inline-block';
+        if (b) b.style.display = 'inline-block';
+        if (window.location.hostname.includes('github.io')) {
+          var cleanPath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+          window.location.replace(cleanPath + 'docs/' + window.location.search + window.location.hash);
+        }
+      }
+      setTimeout(function() {
+        if (!window.__appLoaded) {
+          var s = document.getElementById('initial-loading-status');
+          var b = document.getElementById('initial-loading-retry');
+          var d = document.getElementById('docs-redirect-btn');
+          if (s) s.innerText = 'লোড হতে দেরি হচ্ছে। সরাসরি কম্পাইল্ড ড্যাশবোর্ড ওপেন করতে পারেন:';
+          if (b) b.style.display = 'inline-block';
+          if (d) d.style.display = 'inline-block';
+        }
+      }, 5000);
+    </script>
+    <style>
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+  </body>
+</html>
