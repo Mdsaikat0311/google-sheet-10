@@ -1,4 +1,4 @@
-import { Product, Order, Sheet1ProductReport, ProductReportSource } from '../types';
+import { Product, Order, Sheet1ProductReport, ProductReportSource, Sheet3ProductEntry } from '../types';
 
 export const DEFAULT_SPREADSHEET_ID = '1aHUCGINJ8rB29rXXckH7uMTwrk163v6aQFTfQ6ptr6M';
 
@@ -899,12 +899,12 @@ export interface AppsScriptUpdatePayload {
   col?: number;
   value?: string | number;
   delivery_status?: string;
-  delivery_amount?: number;
-  delivery_charge?: number;
-  cod?: number;
-  amount?: number;
-  price?: number;
-  total?: number;
+  delivery_amount?: number | string;
+  delivery_charge?: number | string;
+  cod?: number | string;
+  amount?: number | string;
+  price?: number | string;
+  total?: number | string;
   number?: string;
   mobile?: string;
   [key: string]: any;
@@ -1545,6 +1545,36 @@ function doPost(e) {
 }
 
 function handleOrderUpdate_(data) {
+  const targetSheetName = data.sheetName || data.tabName || (data.action && data.action.includes('sheet3') ? 'Sheet3' : '');
+  if (targetSheetName === 'Sheet3' || (data.action && data.action.includes('sheet3'))) {
+    const s3 = getWooSheet_('Sheet3');
+    if (data.action === 'append_sheet3_entry') {
+      s3.appendRow([
+        data.date || new Date().toLocaleString(),
+        data.productName || data.product || '',
+        data.source || 'Stock',
+        data.stockIn === '' || data.stockIn === undefined ? '' : Number(data.stockIn),
+        data.stockOut === '' || data.stockOut === undefined ? '' : Number(data.stockOut),
+        data.currentStock !== undefined ? Number(data.currentStock) : 0,
+        data.currentPrice || data.price || ''
+      ]);
+      return responseJson_({ success: true, message: "Sheet3 row appended" });
+    }
+
+    let rNum = parseInt(data.row_number || data.row || data.rowIndex, 10);
+    if (!rNum || isNaN(rNum) || rNum < 8) {
+      rNum = s3.getLastRow() + 1;
+    }
+    if (data.date !== undefined) s3.getRange(rNum, 1).setValue(String(data.date));
+    if (data.productName !== undefined || data.product !== undefined) s3.getRange(rNum, 2).setValue(String(data.productName || data.product));
+    if (data.source !== undefined) s3.getRange(rNum, 3).setValue(String(data.source));
+    if (data.stockIn !== undefined) s3.getRange(rNum, 4).setValue(data.stockIn === '' ? '' : Number(data.stockIn));
+    if (data.stockOut !== undefined) s3.getRange(rNum, 5).setValue(data.stockOut === '' ? '' : Number(data.stockOut));
+    if (data.currentStock !== undefined) s3.getRange(rNum, 6).setValue(Number(data.currentStock));
+    if (data.currentPrice !== undefined || data.price !== undefined) s3.getRange(rNum, 7).setValue(data.currentPrice || data.price);
+    return responseJson_({ success: true, message: "Sheet3 updated", row_number: rNum });
+  }
+
   const sheet = getWooSheet_();
   let rowNumber = parseInt(data.row_number || data.row || data.rowIndex, 10);
 
@@ -2074,11 +2104,17 @@ export const matchProductWithSheet3 = (
 
 export const fetchSheet3Stock = async (
   spreadsheetId: string = DEFAULT_SPREADSHEET_ID
-): Promise<{ stockItems: Sheet3StockItem[]; logs: Sheet3TransactionRecord[]; tabName: string }> => {
+): Promise<{
+  stockItems: Sheet3StockItem[];
+  logs: Sheet3TransactionRecord[];
+  entries: Sheet3ProductEntry[];
+  tabName: string;
+}> => {
   const cleanId = extractSpreadsheetId(spreadsheetId);
   const targetTab = 'Sheet3';
   const stockItems: Sheet3StockItem[] = [];
   const logs: Sheet3TransactionRecord[] = [];
+  const entries: Sheet3ProductEntry[] = [];
 
   try {
     // 1. Fetch live stock summary from row 2 (names) and row 3 (quantities) across columns A to Z
@@ -2111,46 +2147,108 @@ export const fetchSheet3Stock = async (
       }
     }
 
-    // 2. Fetch transaction logs from lower section of Sheet 3
-    const logsUrl = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(targetTab)}&_t=${Date.now()}`;
-    const logsRes = await fetch(logsUrl, { cache: 'no-store' });
-    if (logsRes.ok) {
-      const text = await logsRes.text();
+    // 2. Fetch real-time product entries from Sheet 3 (Table starts at row 7: Date, Product Name, Source, Stock In, Stock Out, Current Stock, Current price)
+    const entriesUrl = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(targetTab)}&range=A7:H1000&headers=1&_t=${Date.now()}`;
+    const entriesRes = await fetch(entriesUrl, { cache: 'no-store' });
+    let fetchedViaRange = false;
+
+    if (entriesRes.ok) {
+      const text = await entriesRes.text();
       const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
       if (match && match[1]) {
         const data = JSON.parse(match[1]);
-        if (data.table && data.table.rows) {
-          const rows = data.table.rows;
-          rows.forEach((r: any, rIdx: number) => {
+        if (data.table && data.table.rows && data.table.rows.length > 0) {
+          data.table.rows.forEach((r: any, idx: number) => {
             const cells = r.c || [];
-            const dateVal = cells[0]?.f || cells[0]?.v || '';
-            const prodVal = cells[1]?.f || cells[1]?.v || '';
-            const sourceVal = cells[2]?.f || cells[2]?.v || '';
-            const inVal = cells[3]?.v !== null && cells[3]?.v !== undefined ? Number(cells[3].v) : undefined;
-            const outVal = cells[4]?.v !== null && cells[4]?.v !== undefined ? Number(cells[4].v) : undefined;
-            const balVal = cells[5]?.v !== null && cells[5]?.v !== undefined ? Number(cells[5].v) : 0;
+            const dateVal = String(cells[0]?.f || cells[0]?.v || '').trim();
+            const prodVal = String(cells[1]?.f || cells[1]?.v || '').trim();
+            const sourceVal = String(cells[2]?.f || cells[2]?.v || '').trim();
+            const inVal = cells[3]?.v !== null && cells[3]?.v !== undefined && cells[3]?.v !== '' ? Number(cells[3].v) : '';
+            const outVal = cells[4]?.v !== null && cells[4]?.v !== undefined && cells[4]?.v !== '' ? Number(cells[4].v) : '';
+            const curStock = cells[5]?.v !== null && cells[5]?.v !== undefined && cells[5]?.v !== '' ? Number(cells[5].v) : 0;
+            const curPrice = cells[6]?.v !== null && cells[6]?.v !== undefined && cells[6]?.v !== '' ? Number(cells[6].v) : '';
 
-            const pStr = String(prodVal).trim();
-            const dStr = String(dateVal).trim();
-            if (
-              pStr &&
-              pStr.toLowerCase() !== 'product name' &&
-              pStr.toLowerCase() !== 'no sellect' &&
-              pStr.toLowerCase() !== 'product sellect' &&
-              dStr &&
-              (dStr.includes(':') || dStr.includes('/'))
-            ) {
+            // Header is Row 7, so first data row is Row 8
+            const sheetRowIndex = idx + 8;
+
+            if (prodVal || dateVal) {
+              const entryItem: Sheet3ProductEntry = {
+                id: `sheet3-row-${sheetRowIndex}`,
+                rowIndex: sheetRowIndex,
+                date: dateVal,
+                productName: prodVal,
+                source: sourceVal || 'Stock',
+                stockIn: inVal,
+                stockOut: outVal,
+                currentStock: isNaN(curStock) ? 0 : curStock,
+                currentPrice: curPrice,
+              };
+              entries.push(entryItem);
+
               logs.push({
-                rowIndex: rIdx + 1,
-                date: dStr,
-                productName: pStr,
-                source: String(sourceVal).trim() || 'Stock',
-                inQty: isNaN(inVal as number) ? undefined : inVal,
-                outQty: isNaN(outVal as number) ? undefined : outVal,
-                balance: isNaN(balVal) ? 0 : balVal,
+                rowIndex: sheetRowIndex,
+                date: dateVal,
+                productName: prodVal,
+                source: sourceVal || 'Stock',
+                inQty: inVal !== '' && !isNaN(Number(inVal)) ? Number(inVal) : undefined,
+                outQty: outVal !== '' && !isNaN(Number(outVal)) ? Number(outVal) : undefined,
+                balance: isNaN(curStock) ? 0 : curStock,
               });
             }
           });
+          fetchedViaRange = true;
+        }
+      }
+    }
+
+    // Fallback: If range query returned no entries, query without range
+    if (!fetchedViaRange) {
+      const fallbackUrl = `https://docs.google.com/spreadsheets/d/${cleanId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(targetTab)}&headers=0&_t=${Date.now()}`;
+      const fbRes = await fetch(fallbackUrl, { cache: 'no-store' });
+      if (fbRes.ok) {
+        const text = await fbRes.text();
+        const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);/);
+        if (match && match[1]) {
+          const data = JSON.parse(match[1]);
+          if (data.table && data.table.rows) {
+            data.table.rows.forEach((r: any, rIdx: number) => {
+              if (rIdx < 3) return;
+              const cells = r.c || [];
+              const dateVal = String(cells[0]?.f || cells[0]?.v || '').trim();
+              const prodVal = String(cells[1]?.f || cells[1]?.v || '').trim();
+              const sourceVal = String(cells[2]?.f || cells[2]?.v || '').trim();
+              const inVal = cells[3]?.v !== null && cells[3]?.v !== undefined && cells[3]?.v !== '' ? Number(cells[3].v) : '';
+              const outVal = cells[4]?.v !== null && cells[4]?.v !== undefined && cells[4]?.v !== '' ? Number(cells[4].v) : '';
+              const curStock = cells[5]?.v !== null && cells[5]?.v !== undefined && cells[5]?.v !== '' ? Number(cells[5].v) : 0;
+              const curPrice = cells[6]?.v !== null && cells[6]?.v !== undefined && cells[6]?.v !== '' ? Number(cells[6].v) : '';
+
+              const sheetRowIndex = rIdx + 5;
+
+              if (prodVal && prodVal.toLowerCase() !== 'product name') {
+                entries.push({
+                  id: `sheet3-row-${sheetRowIndex}`,
+                  rowIndex: sheetRowIndex,
+                  date: dateVal,
+                  productName: prodVal,
+                  source: sourceVal || 'Stock',
+                  stockIn: inVal,
+                  stockOut: outVal,
+                  currentStock: isNaN(curStock) ? 0 : curStock,
+                  currentPrice: curPrice,
+                });
+
+                logs.push({
+                  rowIndex: sheetRowIndex,
+                  date: dateVal,
+                  productName: prodVal,
+                  source: sourceVal || 'Stock',
+                  inQty: inVal !== '' && !isNaN(Number(inVal)) ? Number(inVal) : undefined,
+                  outQty: outVal !== '' && !isNaN(Number(outVal)) ? Number(outVal) : undefined,
+                  balance: isNaN(curStock) ? 0 : curStock,
+                });
+              }
+            });
+          }
         }
       }
     }
@@ -2158,7 +2256,142 @@ export const fetchSheet3Stock = async (
     console.warn('Failed to fetch Sheet3 stock data:', err);
   }
 
-  return { stockItems, logs, tabName: targetTab };
+  return { stockItems, logs, entries, tabName: targetTab };
+};
+
+/**
+ * Edit an existing Sheet 3 row (Date, Product Name, Source, Stock In, Stock Out, Current Stock, Current price)
+ */
+export const updateSheet3Entry = async (
+  spreadsheetId: string,
+  accessToken: string | null | undefined,
+  entry: {
+    rowIndex: number;
+    date: string;
+    productName: string;
+    source: string;
+    stockIn: number | '';
+    stockOut: number | '';
+    currentStock: number;
+    currentPrice: number | '';
+  }
+) => {
+  const cleanId = extractSpreadsheetId(spreadsheetId);
+  const targetTab = 'Sheet3';
+  const rowNum = entry.rowIndex;
+
+  const inVal = entry.stockIn !== '' && entry.stockIn !== undefined && !isNaN(Number(entry.stockIn)) ? Number(entry.stockIn) : '';
+  const outVal = entry.stockOut !== '' && entry.stockOut !== undefined && !isNaN(Number(entry.stockOut)) ? Number(entry.stockOut) : '';
+  const curStockVal = !isNaN(Number(entry.currentStock)) ? Number(entry.currentStock) : 0;
+  const priceVal = entry.currentPrice !== '' && entry.currentPrice !== undefined && !isNaN(Number(entry.currentPrice)) ? Number(entry.currentPrice) : '';
+
+  // 1. Direct REST API if accessToken is available
+  if (accessToken && rowNum >= 8) {
+    try {
+      const range = `'${targetTab}'!A${rowNum}:G${rowNum}`;
+      const res = await fetch(
+        `${SHEETS_API_BASE}/${cleanId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            range,
+            values: [[entry.date, entry.productName, entry.source, inVal, outVal, curStockVal, priceVal]],
+          }),
+        }
+      );
+      if (res.ok) {
+        return { success: true, updatedRow: rowNum };
+      }
+    } catch (err) {
+      console.warn('Direct Google Sheet API update error, falling back to Apps Script:', err);
+    }
+  }
+
+  // 2. Apps Script fallback
+  return updateOrderViaAppsScript({
+    action: 'update_sheet3_entry',
+    sheetName: 'Sheet3',
+    tabName: 'Sheet3',
+    row: rowNum,
+    row_number: rowNum,
+    rowIndex: rowNum,
+    date: entry.date,
+    productName: entry.productName,
+    product: entry.productName,
+    source: entry.source,
+    stockIn: inVal,
+    stockOut: outVal,
+    currentStock: curStockVal,
+    currentPrice: priceVal,
+    price: priceVal,
+  });
+};
+
+/**
+ * Append a new row to Sheet 3 (Date, Product Name, Source, Stock In, Stock Out, Current Stock, Current price)
+ */
+export const appendSheet3Entry = async (
+  spreadsheetId: string,
+  accessToken: string | null | undefined,
+  entry: {
+    date: string;
+    productName: string;
+    source: string;
+    stockIn: number | '';
+    stockOut: number | '';
+    currentStock: number;
+    currentPrice: number | '';
+  }
+) => {
+  const cleanId = extractSpreadsheetId(spreadsheetId);
+  const targetTab = 'Sheet3';
+  const inVal = entry.stockIn !== '' && entry.stockIn !== undefined && !isNaN(Number(entry.stockIn)) ? Number(entry.stockIn) : '';
+  const outVal = entry.stockOut !== '' && entry.stockOut !== undefined && !isNaN(Number(entry.stockOut)) ? Number(entry.stockOut) : '';
+  const curStockVal = !isNaN(Number(entry.currentStock)) ? Number(entry.currentStock) : 0;
+  const priceVal = entry.currentPrice !== '' && entry.currentPrice !== undefined && !isNaN(Number(entry.currentPrice)) ? Number(entry.currentPrice) : '';
+
+  if (accessToken) {
+    try {
+      const appendRange = `'${targetTab}'!A7:G:append`;
+      const res = await fetch(
+        `${SHEETS_API_BASE}/${cleanId}/values/${encodeURIComponent(appendRange)}?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            values: [[entry.date, entry.productName, entry.source, inVal, outVal, curStockVal, priceVal]],
+          }),
+        }
+      );
+      if (res.ok) {
+        return { success: true };
+      }
+    } catch (err) {
+      console.warn('Direct Google Sheet API append error, falling back to Apps Script:', err);
+    }
+  }
+
+  return updateOrderViaAppsScript({
+    action: 'append_sheet3_entry',
+    sheetName: 'Sheet3',
+    tabName: 'Sheet3',
+    date: entry.date,
+    productName: entry.productName,
+    product: entry.productName,
+    source: entry.source,
+    stockIn: inVal,
+    stockOut: outVal,
+    currentStock: curStockVal,
+    currentPrice: priceVal,
+    price: priceVal,
+  });
 };
 
 /**

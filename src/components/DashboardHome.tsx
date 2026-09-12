@@ -4,7 +4,7 @@ import {
   RefreshCw,
   Boxes,
 } from 'lucide-react';
-import { Order, OrderStatus, Product, StockMovementLog } from '../types';
+import { Order, OrderStatus, Product, StockMovementLog, Sheet3ProductEntry } from '../types';
 import { INITIAL_DAILY_TREND } from '../data/initialOrders';
 import { StockManagerHome } from './StockManagerHome';
 
@@ -22,6 +22,11 @@ interface DashboardHomeProps {
   onApproveCancelReturn: (order: Order, restock: boolean) => void;
   stockLogs: StockMovementLog[];
   onAddProduct?: (newProduct: Omit<Product, 'rowIndex'>) => void;
+  sheet3Entries?: Sheet3ProductEntry[];
+  onUpdateSheet3Entry?: (entry: Sheet3ProductEntry) => Promise<void> | void;
+  onAddSheet3Entry?: (entry: Omit<Sheet3ProductEntry, 'rowIndex' | 'id'>) => Promise<void> | void;
+  onRefreshSheet3?: () => void;
+  isRefreshingSheet3?: boolean;
 }
 
 export const DashboardHome: React.FC<DashboardHomeProps> = ({
@@ -34,6 +39,11 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
   onApproveCancelReturn,
   stockLogs,
   onAddProduct,
+  sheet3Entries,
+  onUpdateSheet3Entry,
+  onAddSheet3Entry,
+  onRefreshSheet3,
+  isRefreshingSheet3,
 }) => {
   // Match the exact 6 columns in Sheet 3 order:
   // Col A: Rose 599 (Cell A3)
@@ -290,6 +300,11 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({
           onApproveCancelReturn={onApproveCancelReturn}
           stockLogs={stockLogs}
           onAddProduct={onAddProduct}
+          sheet3Entries={sheet3Entries}
+          onUpdateSheet3Entry={onUpdateSheet3Entry}
+          onAddSheet3Entry={onAddSheet3Entry}
+          onRefreshSheet3={onRefreshSheet3}
+          isRefreshingSheet3={isRefreshingSheet3}
         />
       </div>
     </div>

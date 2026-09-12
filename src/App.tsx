@@ -11,7 +11,7 @@ import {
   BarChart3,
   Plus,
 } from 'lucide-react';
-import { Order, OrderStatus, Product, CartItem, StockMovementLog } from './types';
+import { Order, OrderStatus, Product, CartItem, StockMovementLog, Sheet3ProductEntry } from './types';
 import { INITIAL_ORDERS } from './data/initialOrders';
 import { INITIAL_PRODUCTS } from './data/initialProducts';
 import {
@@ -37,6 +37,8 @@ import {
   fetchSheet3Stock,
   updateSheet3ProductStock,
   matchProductWithSheet3,
+  updateSheet3Entry,
+  appendSheet3Entry,
 } from './services/sheets';
 import { Sidebar, MainTabType } from './components/Sidebar';
 import { DashboardHome } from './components/DashboardHome';
@@ -160,6 +162,17 @@ export default function App() {
   const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Sheet 3 Realtime Product Entries
+  const [sheet3Entries, setSheet3Entries] = useState<Sheet3ProductEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('sheet3_product_entries');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [isRefreshingSheet3, setIsRefreshingSheet3] = useState<boolean>(false);
+
   // Modals state
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [selectedOrderForView, setSelectedOrderForView] = useState<Order | null>(null);
@@ -172,11 +185,58 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4500);
   };
 
-  // Fetch Sheet 3 live stock
+  // Fetch Sheet 3 live stock & row entries in real time
   const loadSheet3StockLive = async (targetSpreadsheetId: string = spreadsheetId) => {
+    setIsRefreshingSheet3(true);
     try {
       const cleanId = extractSpreadsheetId(targetSpreadsheetId);
       const res = await fetchSheet3Stock(cleanId);
+
+      // 1. Sync Row Entries (Table starting at Row 7)
+      if (res.entries && res.entries.length > 0) {
+        setSheet3Entries(res.entries);
+        try {
+          localStorage.setItem('sheet3_product_entries', JSON.stringify(res.entries));
+        } catch (e) {}
+
+        // Auto-register any new products from Sheet 3 into products state so all views remain synchronized
+        setProducts((prev) => {
+          const updated = [...prev];
+          res.entries.forEach((entry) => {
+            const pName = entry.productName?.trim();
+            if (!pName || pName.toLowerCase() === 'product name') return;
+
+            const existing = updated.find((p) => p.name.toLowerCase() === pName.toLowerCase());
+            if (existing) {
+              if (entry.currentStock !== undefined && !isNaN(entry.currentStock)) {
+                existing.stock = entry.currentStock;
+                existing.status = entry.currentStock <= 0 ? 'out_of_stock' : 'publish';
+              }
+              if (entry.currentPrice && !isNaN(Number(entry.currentPrice))) {
+                existing.salePrice = Number(entry.currentPrice);
+                existing.regularPrice = Number(entry.currentPrice);
+              }
+            } else {
+              const price = entry.currentPrice ? Number(entry.currentPrice) : 599;
+              updated.push({
+                id: `PRD-S3-${entry.rowIndex}`,
+                name: pName,
+                category: 'শিট ৩ পণ্য',
+                regularPrice: price,
+                salePrice: price,
+                stock: entry.currentStock || 0,
+                status: (entry.currentStock || 0) <= 0 ? 'out_of_stock' : 'publish',
+                description: 'গুগল শিট ৩ থেকে রিয়েলটাইম লোডকৃত',
+                image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&auto=format&fit=crop&q=60',
+                rowIndex: entry.rowIndex,
+              });
+            }
+          });
+          return updated;
+        });
+      }
+
+      // 2. Summary Stock
       if (res.stockItems && res.stockItems.length > 0) {
         setProducts((prev) =>
           prev.map((p) => {
@@ -193,7 +253,7 @@ export default function App() {
         );
       }
 
-      // Sync transaction logs from Sheet 3
+      // 3. Sync transaction logs from Sheet 3
       if (res.logs && res.logs.length > 0) {
         const sheetLogs: StockMovementLog[] = res.logs.map((l, idx) => ({
           id: `SHEET3-LOG-${idx}-${l.date}`,
@@ -213,24 +273,76 @@ export default function App() {
       }
     } catch (e) {
       console.warn('Sheet 3 live stock sync error:', e);
+    } finally {
+      setIsRefreshingSheet3(false);
     }
   };
 
-  // Real-time listener for Sheet 3 (Background polling + Window Focus refresh)
+  // Handler to update an existing Sheet 3 row entry
+  const handleUpdateSheet3Entry = async (entry: Sheet3ProductEntry) => {
+    // Optimistic UI update
+    setSheet3Entries((prev) =>
+      prev.map((item) => (item.rowIndex === entry.rowIndex ? entry : item))
+    );
+    showToast(`রো #${entry.rowIndex} শিট ৩-এ সেভ করা হচ্ছে...`, 'success');
+
+    try {
+      await updateSheet3Entry(spreadsheetId, accessToken, entry);
+      showToast(`শিট ৩ রো #${entry.rowIndex} সফলভাবে আপডেট হয়েছে!`, 'success');
+      // Refresh in background
+      setTimeout(() => loadSheet3StockLive(spreadsheetId), 1000);
+    } catch (err) {
+      console.error('Failed to update Sheet 3 entry:', err);
+      showToast('শিট ৩ আপডেট ব্যর্থ হয়েছে। অফলাইনে সেভ করা হয়েছে।', 'error');
+    }
+  };
+
+  // Handler to append a new Sheet 3 row entry
+  const handleAddSheet3Entry = async (newEntry: Omit<Sheet3ProductEntry, 'rowIndex' | 'id'>) => {
+    showToast('শিট ৩-এ নতুন এন্ট্রি যোগ করা হচ্ছে...', 'success');
+    const nextRow = sheet3Entries.length > 0
+      ? Math.max(...sheet3Entries.map((e) => e.rowIndex)) + 1
+      : 19;
+    const created: Sheet3ProductEntry = {
+      ...newEntry,
+      rowIndex: nextRow,
+      id: `sheet3-row-${nextRow}-${Date.now()}`,
+    };
+    // Optimistic add to top of list
+    setSheet3Entries((prev) => [created, ...prev]);
+
+    try {
+      await appendSheet3Entry(spreadsheetId, accessToken, newEntry);
+      showToast('শিট ৩-এ নতুন এন্ট্রি সফলভাবে যোগ হয়েছে!', 'success');
+      setTimeout(() => loadSheet3StockLive(spreadsheetId), 1200);
+    } catch (err) {
+      console.error('Failed to append Sheet3 entry:', err);
+      showToast('শিট ৩ এন্ট্রি যোগ করতে সমস্যা হয়েছে', 'error');
+    }
+  };
+
+  // Real-time listener for Sheet 3 (Fast 7s polling + Window Focus + Tab Visibility refresh)
   useEffect(() => {
     loadSheet3StockLive(spreadsheetId);
     const interval = setInterval(() => {
       loadSheet3StockLive(spreadsheetId);
-    }, 12000);
+    }, 7000);
 
     const onFocus = () => {
       loadSheet3StockLive(spreadsheetId);
     };
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        loadSheet3StockLive(spreadsheetId);
+      }
+    };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [spreadsheetId]);
 
@@ -962,6 +1074,11 @@ export default function App() {
               onApproveCancelReturn={handleApproveCancelReturn}
               stockLogs={stockLogs}
               onAddProduct={handleAddProduct}
+              sheet3Entries={sheet3Entries}
+              onUpdateSheet3Entry={handleUpdateSheet3Entry}
+              onAddSheet3Entry={handleAddSheet3Entry}
+              onRefreshSheet3={() => loadSheet3StockLive(spreadsheetId)}
+              isRefreshingSheet3={isRefreshingSheet3}
             />
           )}
 

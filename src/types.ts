@@ -49,6 +49,18 @@ export interface Order {
   returnApprovedDate?: string;
 }
 
+export interface Sheet3ProductEntry {
+  id: string;
+  rowIndex: number;
+  date: string;
+  productName: string;
+  source: string;
+  stockIn: number | '';
+  stockOut: number | '';
+  currentStock: number;
+  currentPrice: number | '';
+}
+
 export interface StockMovementLog {
   id: string;
   productId: string;
