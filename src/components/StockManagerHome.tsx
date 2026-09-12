@@ -551,8 +551,8 @@ export const StockManagerHome: React.FC<StockManagerHomeProps> = ({
             </div>
           </div>
 
-          {/* Cards Container: Mobile Optimized Card Layout */}
-          <div className="space-y-2">
+          {/* Cards Container: Mobile Optimized 2-Line Slim Card Layout */}
+          <div className="space-y-1.5">
             {hasSheet3Data ? (
               filteredSheet3Entries.slice(0, visibleProductsCount).map((entry, idx) => {
                 const isOutOfStock = entry.currentStock <= 0;
@@ -563,109 +563,82 @@ export const StockManagerHome: React.FC<StockManagerHomeProps> = ({
                 return (
                   <div
                     key={entry.id || `sheet3-row-${entry.rowIndex}-${idx}`}
-                    className="bg-[#12151f] hover:bg-[#151926] border border-[#1e2436] hover:border-pink-500/40 rounded-xl p-3 sm:p-3.5 transition-all shadow-sm flex flex-col gap-2.5 group"
+                    className="bg-[#12151f] hover:bg-[#151926] border border-[#1e2436] hover:border-pink-500/40 rounded-xl px-2.5 py-2 sm:px-3 sm:py-2.5 transition-all shadow-xs flex flex-col gap-1.5 group"
                   >
-                    {/* Header Row: Product Name + Row # + Source Badge */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-pink-500/20 text-pink-400 border border-pink-500/30">
-                          <Package className="w-3.5 h-3.5" />
+                    {/* Line 1: Product Name, Row #, Source Badge + Top Edit Button Column */}
+                    <div className="flex items-center justify-between gap-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                          <Package className="w-3 h-3" />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-bold text-white text-xs sm:text-sm font-mono truncate leading-tight">
-                              {entry.productName}
-                            </h4>
-                            <span className="text-[10px] text-pink-400 font-mono bg-pink-500/10 px-1.5 py-0.2 rounded border border-pink-500/20 shrink-0">
-                              Row #{entry.rowIndex}
-                            </span>
-                          </div>
-                          {/* Date & Time */}
-                          <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
-                            <span className="flex items-center gap-1 text-gray-300 font-mono">
-                              <Calendar className="w-2.5 h-2.5 text-pink-400" />
-                              {entry.date || '০৮/০৯/২৬'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Source Badge */}
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
-                          isReturn
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                            : isDelivery
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        }`}
-                      >
-                        {entry.source || 'Stock'}
-                      </span>
-                    </div>
-
-                    {/* Metric Grid: 2 cols on mobile, 4 cols on desktop */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-[#1a2030]">
-                      {/* 1. Stock In */}
-                      <div className="bg-[#0e111a] border border-[#1b2131] rounded-lg p-2 flex flex-col justify-center">
-                        <span className="text-[10px] text-gray-400 block">স্টক ইন (In)</span>
-                        <span className="font-mono font-bold text-xs sm:text-sm text-emerald-400">
-                          {entry.stockIn !== undefined && entry.stockIn !== '' && Number(entry.stockIn) > 0
-                            ? `+${entry.stockIn} পিস`
-                            : '—'}
+                        <h4 className="font-bold text-white text-xs sm:text-sm font-mono truncate leading-tight">
+                          {entry.productName}
+                        </h4>
+                        <span className="text-[9px] sm:text-[10px] text-pink-400 font-mono bg-pink-500/10 px-1.5 py-0.2 rounded border border-pink-500/20 shrink-0">
+                          #{entry.rowIndex}
                         </span>
-                      </div>
-
-                      {/* 2. Stock Out */}
-                      <div className="bg-[#0e111a] border border-[#1b2131] rounded-lg p-2 flex flex-col justify-center">
-                        <span className="text-[10px] text-gray-400 block">স্টক আউট (Out)</span>
-                        <span className="font-mono font-bold text-xs sm:text-sm text-rose-400">
-                          {entry.stockOut !== undefined && entry.stockOut !== '' && Number(entry.stockOut) > 0
-                            ? `-${entry.stockOut} পিস`
-                            : '—'}
-                        </span>
-                      </div>
-
-                      {/* 3. Current Stock */}
-                      <div className="bg-[#0e111a] border border-[#1b2131] rounded-lg p-2 flex flex-col justify-center">
-                        <span className="text-[10px] text-gray-400 block">বর্তমান স্টক</span>
                         <span
-                          className={`font-mono font-bold text-xs sm:text-sm ${
-                            isOutOfStock
-                              ? 'text-rose-400'
-                              : isLowStock
-                              ? 'text-amber-300'
-                              : 'text-emerald-300'
+                          className={`text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.2 rounded-full border shrink-0 ${
+                            isReturn
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              : isDelivery
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                           }`}
                         >
-                          {entry.currentStock !== undefined ? `${entry.currentStock} পিস` : '০ পিস'}
+                          {entry.source || 'Stock'}
                         </span>
                       </div>
 
-                      {/* 4. Current Price */}
-                      <div className="bg-[#0e111a] border border-[#1b2131] rounded-lg p-2 flex flex-col justify-center">
-                        <span className="text-[10px] text-gray-400 block">বর্তমান মূল্য</span>
-                        <span className="font-mono font-bold text-xs sm:text-sm text-pink-400">
-                          {entry.currentPrice !== undefined && entry.currentPrice !== ''
-                            ? `৳${entry.currentPrice}`
-                            : '৳৫৯৯'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Bottom Action Row (Touch-optimized Edit Button) */}
-                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#181e2e]">
-                      <span className="text-[10px] text-gray-400 font-mono truncate hidden sm:inline">
-                        গুগল শিট ৩ • রো #{entry.rowIndex}
-                      </span>
+                      {/* Edit Button at Top as a Single Compact Column */}
                       <button
                         onClick={() => openSheet3Editor(entry)}
-                        className="w-full sm:w-auto min-h-[38px] sm:min-h-0 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-600/20 to-rose-600/20 hover:from-pink-600 hover:to-rose-600 text-pink-300 hover:text-white border border-pink-500/30 hover:border-pink-500 flex items-center justify-center gap-1.5 text-xs font-semibold transition-all cursor-pointer active:scale-95 shadow-xs"
+                        className="shrink-0 px-2.5 py-1 rounded-lg bg-pink-500/10 hover:bg-pink-600 text-pink-300 hover:text-white border border-pink-500/30 hover:border-pink-500 flex items-center gap-1 text-[11px] font-semibold transition-all cursor-pointer active:scale-95 shadow-xs"
                         title="শিট ৩ এর এই রো এর সব তথ্য এডিট করুন"
                       >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>রো #{entry.rowIndex} এডিট ও সিঙ্ক করুন</span>
+                        <Edit3 className="w-3 h-3" />
+                        <span>Edit</span>
                       </button>
+                    </div>
+
+                    {/* Line 2: Compact Mobile-Optimized Metrics (Date, In, Out, Stock, Price) */}
+                    <div className="flex items-center justify-between gap-1 text-[10px] sm:text-[11px] font-mono flex-wrap sm:flex-nowrap pt-1 border-t border-[#181e2e]/80">
+                      {/* Date & Time */}
+                      <span className="flex items-center gap-1 text-gray-400 shrink-0">
+                        <Calendar className="w-2.5 h-2.5 text-pink-400" />
+                        <span className="truncate max-w-[95px] sm:max-w-none">{entry.date || '০৮/০৯/২৬'}</span>
+                      </span>
+
+                      {/* Metrics Badges */}
+                      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap">
+                        {/* Stock In */}
+                        <span className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.2 rounded font-bold">
+                          In: +{entry.stockIn !== undefined && entry.stockIn !== '' ? entry.stockIn : 0}
+                        </span>
+
+                        {/* Stock Out */}
+                        <span className="bg-rose-500/10 text-rose-300 border border-rose-500/20 px-1.5 py-0.2 rounded font-bold">
+                          Out: -{entry.stockOut !== undefined && entry.stockOut !== '' ? entry.stockOut : 0}
+                        </span>
+
+                        {/* Current Stock */}
+                        <span
+                          className={`px-1.5 py-0.2 rounded font-bold border ${
+                            isOutOfStock
+                              ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                              : isLowStock
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          }`}
+                        >
+                          স্টক: {entry.currentStock !== undefined ? entry.currentStock : 0}
+                        </span>
+
+                        {/* Price */}
+                        <span className="bg-pink-500/10 text-pink-300 border border-pink-500/20 px-1.5 py-0.2 rounded font-bold">
+                          ৳{entry.currentPrice !== undefined && entry.currentPrice !== '' ? entry.currentPrice : '৫৯৯'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
